@@ -110,3 +110,113 @@ openclaw --profile main status
 openclaw --profile rescue status
 openclaw --profile rescue browser status
 ```
+
+## Docker per-user instances
+
+If you want one Dockerized Gateway per user, isolate each instance with its own:
+
+- config dir
+- workspace dir
+- ports
+- gateway token
+- Compose project name
+
+The simplest path in this repo is `scripts/docker-multi-user.sh`.
+
+Initialize one instance per user:
+
+```bash
+scripts/docker-multi-user.sh init
+scripts/docker-multi-user.sh init alice --gateway-port 18789 --bind loopback
+scripts/docker-multi-user.sh init bob --gateway-port 18889 --bind loopback
+```
+
+Running `init` without arguments starts an interactive prompt for instance name,
+ports, directories, image, and token.
+
+If you want one shared skill pack for every user, point each instance at the
+same host directory:
+
+```bash
+scripts/docker-multi-user.sh init alice \
+  --gateway-port 18789 \
+  --shared-skills-dir /srv/openclaw/shared-skills
+
+scripts/docker-multi-user.sh init bob \
+  --gateway-port 18889 \
+  --shared-skills-dir /srv/openclaw/shared-skills
+```
+
+The helper will:
+
+- mount `/srv/openclaw/shared-skills` into each container read-only
+- add that container path to `skills.load.extraDirs`
+- keep user-specific `workspace/skills` and `~/.openclaw/skills` isolated
+
+This creates:
+
+- `/srv/openclaw/alice/.openclaw`
+- `/srv/openclaw/alice/workspace`
+- `/srv/openclaw/alice/.env`
+
+and the same layout for `bob`.
+
+Start the instances:
+
+```bash
+scripts/docker-multi-user.sh start alice
+scripts/docker-multi-user.sh start bob
+```
+
+Run per-instance CLI commands through the matching container network namespace:
+
+```bash
+scripts/docker-multi-user.sh run alice doctor
+scripts/docker-multi-user.sh run alice config get gateway.bind
+scripts/docker-multi-user.sh run bob plugins list
+```
+
+Check status or logs:
+
+```bash
+scripts/docker-multi-user.sh status alice
+scripts/docker-multi-user.sh logs alice
+scripts/docker-multi-user.sh dashboard bob
+```
+
+### Docker layout
+
+Each instance keeps its own state under one base directory:
+
+```text
+/srv/openclaw/
+  alice/
+    .env
+    .openclaw/
+      extensions/
+      openclaw.json
+    workspace/
+  bob/
+    .env
+    .openclaw/
+      extensions/
+      openclaw.json
+    workspace/
+```
+
+### Plugin path rule
+
+For Docker instances, do not point `plugins.load.paths` at host-only development paths such as `/Users/.../openclaw/extensions/feishu` unless you also bind-mount that host path into the container.
+
+Prefer one of these instead:
+
+- copy/install the plugin into the instance config dir under `.openclaw/extensions`
+- use bundled plugins already present in the image
+- add an explicit bind mount and then reference the container-visible path
+
+### Shared skills rule
+
+Shared skills are safe to centralize because OpenClaw already supports shared
+skill directories via `skills.load.extraDirs`. Keep the shared directory
+read-only in Docker so one user cannot mutate the skill pack for all other
+users.
