@@ -281,8 +281,10 @@ export function buildMetadataYaml(params: {
   authChoice: AuthChoice;
   inheritAuth: boolean;
   inheritAuthFrom: string;
+  inheritChannels: boolean;
   inheritModels: boolean;
   inheritWebSearch: boolean;
+  inheritSkillsConfig: boolean;
   inheritManagedSkills: boolean;
   sharedSkillsDir: string;
   sharedSkillsMount: string;
@@ -313,8 +315,10 @@ export function buildMetadataYaml(params: {
       inherit_auth_from: params.inheritAuthFrom,
     },
     inherit: {
+      channels: params.inheritChannels,
       models: params.inheritModels,
       web_search: params.inheritWebSearch,
+      skills_config: params.inheritSkillsConfig,
       managed_skills: params.inheritManagedSkills,
     },
     shared_skills: {

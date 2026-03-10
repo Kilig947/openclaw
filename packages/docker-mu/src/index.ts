@@ -165,6 +165,11 @@ function syncInstanceConfig(params: {
     delete (next.agents as Record<string, unknown>).list;
   }
 
+  const sourceChannels = getObject(params.sourceConfig.channels);
+  if (Object.keys(sourceChannels).length > 0) {
+    next.channels = sourceChannels;
+  }
+
   const targetPlugins = getObject(params.targetConfig.plugins);
   const targetPluginLoad = getObject(targetPlugins.load);
   const nextPlugins = getObject(next.plugins);
@@ -230,6 +235,11 @@ function syncInstanceConfig(params: {
       ...nextTools,
       web: sourceTools.web,
     };
+  }
+
+  const sourceSkills = getObject(params.sourceConfig.skills);
+  if (Object.keys(sourceSkills).length > 0) {
+    next.skills = mergeRecords(getObject(next.skills), sourceSkills);
   }
 
   if (params.env.OPENCLAW_SHARED_SKILLS_DIR) {
@@ -300,8 +310,10 @@ program
   .option("--auth-choice <choice>")
   .option("--inherit-auth")
   .option("--inherit-auth-from <path>")
+  .option("--inherit-channels")
   .option("--inherit-models")
   .option("--inherit-web-search")
+  .option("--inherit-skills-config")
   .option("--inherit-managed-skills")
   .option("--openai-api-key <key>")
   .option("--anthropic-api-key <key>")
@@ -329,8 +341,10 @@ program
       force: Boolean(opts.force),
       inheritAuth: Boolean(opts.inheritAuth),
       inheritAuthFrom: opts.inheritAuthFrom,
+      inheritChannels: Boolean(opts.inheritChannels),
       inheritModels: Boolean(opts.inheritModels),
       inheritWebSearch: Boolean(opts.inheritWebSearch),
+      inheritSkillsConfig: Boolean(opts.inheritSkillsConfig),
       inheritManagedSkills: Boolean(opts.inheritManagedSkills),
       openaiApiKey: opts.openaiApiKey,
       anthropicApiKey: opts.anthropicApiKey,
@@ -361,8 +375,10 @@ program
   .option("--auth-choice <choice>")
   .option("--inherit-auth")
   .option("--inherit-auth-from <path>")
+  .option("--inherit-channels")
   .option("--inherit-models")
   .option("--inherit-web-search")
+  .option("--inherit-skills-config")
   .option("--inherit-managed-skills")
   .option("--openai-api-key <key>")
   .option("--anthropic-api-key <key>")
@@ -390,8 +406,10 @@ program
       force: Boolean(opts.force),
       inheritAuth: Boolean(opts.inheritAuth),
       inheritAuthFrom: opts.inheritAuthFrom,
+      inheritChannels: Boolean(opts.inheritChannels),
       inheritModels: Boolean(opts.inheritModels),
       inheritWebSearch: Boolean(opts.inheritWebSearch),
+      inheritSkillsConfig: Boolean(opts.inheritSkillsConfig),
       inheritManagedSkills: Boolean(opts.inheritManagedSkills),
       openaiApiKey: opts.openaiApiKey,
       anthropicApiKey: opts.anthropicApiKey,

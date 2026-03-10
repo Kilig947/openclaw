@@ -25,7 +25,6 @@ import {
   pathExists,
   randomToken,
   readJson5File,
-  resolveAuthChoice,
   sanitizeName,
   writeJsonFile,
   writeTextFile,
@@ -52,8 +51,10 @@ type InitOptions = {
   force?: boolean;
   inheritAuth?: boolean;
   inheritAuthFrom?: string;
+  inheritChannels?: boolean;
   inheritModels?: boolean;
   inheritWebSearch?: boolean;
+  inheritSkillsConfig?: boolean;
   inheritManagedSkills?: boolean;
   openaiApiKey?: string;
   anthropicApiKey?: string;
@@ -120,8 +121,10 @@ function mergeConfig(params: {
   sharedSkillsMount: string;
   hasSharedSkills: boolean;
   inheritAuth: boolean;
+  inheritChannels: boolean;
   inheritModels: boolean;
   inheritWebSearch: boolean;
+  inheritSkillsConfig: boolean;
 }) {
   // Instance init should only inherit explicitly selected slices from the source
   // state. Do not clone the full local config, otherwise hooks/bootstrap/heartbeat
@@ -215,6 +218,14 @@ function mergeConfig(params: {
   }
 
   if (
+    params.inheritChannels &&
+    params.sourceConfig?.channels &&
+    typeof params.sourceConfig.channels === "object"
+  ) {
+    next.channels = params.sourceConfig.channels as Record<string, unknown>;
+  }
+
+  if (
     params.inheritWebSearch &&
     params.sourceConfig?.tools &&
     typeof params.sourceConfig.tools === "object"
@@ -232,6 +243,13 @@ function mergeConfig(params: {
     const currentTools = getObject(next.tools);
     delete currentTools.web;
     next.tools = currentTools;
+  }
+
+  if (params.inheritSkillsConfig) {
+    const sourceSkills = getObject(params.sourceConfig?.skills);
+    if (Object.keys(sourceSkills).length > 0) {
+      next.skills = mergeRecords(getObject(next.skills), sourceSkills);
+    }
   }
 
   return next;
@@ -333,7 +351,7 @@ async function promptInitOptions(input: InitOptions) {
   );
   const sharedSkillsInput = String(
     await text({
-      message: "共享 skills 宿主机目录",
+      message: "共享 skills 宿主机目录（可让多个用户共享同一个目录）",
       initialValue: input.sharedSkillsDir || "",
       placeholder: "可选",
     }),
@@ -347,21 +365,6 @@ async function promptInitOptions(input: InitOptions) {
         }),
       )
     : input.sharedSkillsMount || DEFAULT_SHARED_SKILLS_MOUNT;
-  const authChoice = resolveAuthChoice(
-    String(
-      await select({
-        message: "认证方式",
-        options: [
-          { value: "skip", label: "skip", hint: "稍后再配置" },
-          { value: "openai-api-key", label: "openai-api-key" },
-          { value: "apiKey", label: "apiKey" },
-          { value: "openai-codex", label: "openai-codex" },
-          { value: "token", label: "token" },
-        ],
-        initialValue: resolveAuthChoice(input.authChoice),
-      }),
-    ),
-  );
   const token = String(
     await text({
       message: "Gateway token",
@@ -388,10 +391,22 @@ async function promptInitOptions(input: InitOptions) {
       initialValue: Boolean(input.inheritModels),
     }),
   );
+  const inheritChannels = Boolean(
+    await confirm({
+      message: "是否继承来源 openclaw.json 中的 channels 配置？",
+      initialValue: Boolean(input.inheritChannels),
+    }),
+  );
   const inheritWebSearch = Boolean(
     await confirm({
       message: "是否继承来源 openclaw.json 中的 Web 搜索配置？",
       initialValue: Boolean(input.inheritWebSearch),
+    }),
+  );
+  const inheritSkillsConfig = Boolean(
+    await confirm({
+      message: "是否继承来源 openclaw.json 中的 skills 配置本身？",
+      initialValue: Boolean(input.inheritSkillsConfig),
     }),
   );
   const inheritManagedSkills = Boolean(
@@ -416,12 +431,13 @@ async function promptInitOptions(input: InitOptions) {
     image,
     sharedSkillsDir,
     sharedSkillsMount,
-    authChoice,
     token,
     inheritAuth,
     inheritAuthFrom,
+    inheritChannels,
     inheritModels,
     inheritWebSearch,
+    inheritSkillsConfig,
     inheritManagedSkills,
   };
 }
@@ -433,8 +449,10 @@ export async function runInit(input: InitOptions) {
         ...preloadInput,
         force: true,
         inheritAuth: preloadInput.inheritAuth ?? true,
+        inheritChannels: preloadInput.inheritChannels ?? false,
         inheritModels: preloadInput.inheritModels ?? true,
         inheritWebSearch: preloadInput.inheritWebSearch ?? true,
+        inheritSkillsConfig: preloadInput.inheritSkillsConfig ?? false,
         inheritManagedSkills: preloadInput.inheritManagedSkills ?? true,
       }
     : preloadInput;
@@ -459,13 +477,15 @@ export async function runInit(input: InitOptions) {
   const workspaceDir = path.resolve(options.workspaceDir || path.join(instanceDir, "workspace"));
   const projectName = options.projectName || `openclaw-${instance}`;
   const image = options.image || DEFAULT_IMAGE;
-  const authChoice = resolveAuthChoice(options.authChoice);
+  const authChoice = options.authChoice?.trim() || "skip";
   const inheritAuth = Boolean(options.inheritAuth);
   const inheritAuthFrom = path.resolve(
     options.inheritAuthFrom || path.join(process.env.HOME || "", ".openclaw"),
   );
+  const inheritChannels = Boolean(options.inheritChannels);
   const inheritModels = Boolean(options.inheritModels);
   const inheritWebSearch = Boolean(options.inheritWebSearch);
+  const inheritSkillsConfig = Boolean(options.inheritSkillsConfig);
   const inheritManagedSkills = Boolean(options.inheritManagedSkills);
   const sharedSkillsDir = options.sharedSkillsDir
     ? path.resolve(options.sharedSkillsDir)
@@ -488,8 +508,10 @@ export async function runInit(input: InitOptions) {
     console.log(`  approveDevice: ${approveDevice ? "yes" : "no"}`);
     console.log(`  disableGatewayAuth: ${disableGatewayAuth ? "yes" : "no"}`);
     console.log(`  inheritAuth: ${inheritAuth ? "yes" : "no"}`);
+    console.log(`  inheritChannels: ${inheritChannels ? "yes" : "no"}`);
     console.log(`  inheritModels: ${inheritModels ? "yes" : "no"}`);
     console.log(`  inheritWebSearch: ${inheritWebSearch ? "yes" : "no"}`);
+    console.log(`  inheritSkillsConfig: ${inheritSkillsConfig ? "yes" : "no"}`);
     console.log(`  inheritManagedSkills: ${inheritManagedSkills ? "yes" : "no"}`);
     console.log("");
   }
@@ -549,8 +571,10 @@ export async function runInit(input: InitOptions) {
     sharedSkillsMount,
     hasSharedSkills: Boolean(sharedSkillsDir),
     inheritAuth,
+    inheritChannels,
     inheritModels,
     inheritWebSearch,
+    inheritSkillsConfig,
   });
   await writeJsonFile(path.join(configDir, "openclaw.json"), mergedConfig);
 
@@ -597,8 +621,10 @@ export async function runInit(input: InitOptions) {
       authChoice,
       inheritAuth,
       inheritAuthFrom,
+      inheritChannels,
       inheritModels,
       inheritWebSearch,
+      inheritSkillsConfig,
       inheritManagedSkills,
       sharedSkillsDir,
       sharedSkillsMount,
