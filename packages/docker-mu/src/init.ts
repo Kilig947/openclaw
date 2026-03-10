@@ -19,6 +19,7 @@ import {
   inheritAuthProfiles,
   instanceDirFor,
   mergeRecords,
+  parseEnvFile,
   metadataFileFor,
   parsePort,
   pathExists,
@@ -60,6 +61,52 @@ type InitOptions = {
 };
 
 type InstanceConfig = Record<string, unknown>;
+
+async function preloadInitForceDefaults(input: InitOptions): Promise<InitOptions> {
+  const instanceRaw = input.instance?.trim();
+  if (!instanceRaw) {
+    return input;
+  }
+  const instance = sanitizeName(instanceRaw);
+  const baseDir = path.resolve(input.baseDir || DEFAULT_BASE_DIR);
+  const envPath = envFileFor(baseDir, instance);
+  if (!(await pathExists(envPath))) {
+    return input;
+  }
+
+  const env = parseEnvFile(await fs.readFile(envPath, "utf-8"));
+  const configPath = path.join(env.OPENCLAW_CONFIG_DIR, "openclaw.json");
+  const config = (await readJson5File<InstanceConfig>(configPath)) ?? {};
+  const gateway = getObject(config.gateway);
+  const controlUi = getObject(gateway.controlUi);
+  const auth = getObject(gateway.auth);
+
+  return {
+    ...input,
+    baseDir,
+    instance,
+    gatewayPort: input.gatewayPort ?? env.OPENCLAW_GATEWAY_PORT,
+    bridgePort: input.bridgePort ?? env.OPENCLAW_BRIDGE_PORT,
+    bind: input.bind ?? env.OPENCLAW_GATEWAY_BIND,
+    allowLanAccess:
+      input.allowLanAccess ??
+      (Array.isArray(controlUi.allowedOrigins)
+        ? controlUi.allowedOrigins.some((value) => value === "*")
+        : false),
+    approveDevice: input.approveDevice ?? controlUi.dangerouslyDisableDeviceAuth !== true,
+    disableGatewayAuth: input.disableGatewayAuth ?? auth.mode === "none",
+    image: input.image ?? env.OPENCLAW_IMAGE,
+    token: input.token ?? env.OPENCLAW_GATEWAY_TOKEN,
+    configDir: input.configDir ?? env.OPENCLAW_CONFIG_DIR,
+    workspaceDir: input.workspaceDir ?? env.OPENCLAW_WORKSPACE_DIR,
+    projectName: input.projectName ?? env.OPENCLAW_PROJECT_NAME,
+    sharedSkillsDir: input.sharedSkillsDir ?? env.OPENCLAW_SHARED_SKILLS_DIR,
+    sharedSkillsMount: input.sharedSkillsMount ?? env.OPENCLAW_SHARED_SKILLS_MOUNT,
+    authChoice: input.authChoice ?? env.OPENCLAW_INIT_AUTH_CHOICE,
+    inheritAuth: input.inheritAuth ?? env.OPENCLAW_INHERIT_AUTH === "1",
+    inheritAuthFrom: input.inheritAuthFrom ?? env.OPENCLAW_INHERIT_AUTH_FROM,
+  };
+}
 
 function mergeConfig(params: {
   existingConfig: InstanceConfig | null;
@@ -380,17 +427,20 @@ async function promptInitOptions(input: InitOptions) {
 }
 
 export async function runInit(input: InitOptions) {
-  const presetInput = input.initForce
+  const preloadInput = input.initForce ? await preloadInitForceDefaults(input) : input;
+  const presetInput = preloadInput.initForce
     ? {
-        ...input,
+        ...preloadInput,
         force: true,
-        inheritAuth: input.inheritAuth ?? true,
-        inheritModels: input.inheritModels ?? true,
-        inheritWebSearch: input.inheritWebSearch ?? true,
-        inheritManagedSkills: input.inheritManagedSkills ?? true,
+        inheritAuth: preloadInput.inheritAuth ?? true,
+        inheritModels: preloadInput.inheritModels ?? true,
+        inheritWebSearch: preloadInput.inheritWebSearch ?? true,
+        inheritManagedSkills: preloadInput.inheritManagedSkills ?? true,
       }
-    : input;
-  const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    : preloadInput;
+  const interactive = Boolean(
+    process.stdin.isTTY && process.stdout.isTTY && !presetInput.initForce,
+  );
   const options = interactive ? await promptInitOptions(presetInput) : presetInput;
 
   const instance = sanitizeName(options.instance || "");
@@ -424,6 +474,25 @@ export async function runInit(input: InitOptions) {
       : "";
   const sharedSkillsMount = options.sharedSkillsMount || DEFAULT_SHARED_SKILLS_MOUNT;
   const token = options.token || randomToken();
+
+  if (presetInput.initForce) {
+    console.log("OPENCLAW MULTI USER");
+    console.log("");
+    console.log("init-force defaults:");
+    console.log(`  baseDir: ${baseDir}`);
+    console.log(`  instance: ${instance}`);
+    console.log(`  gatewayPort: ${gatewayPort}`);
+    console.log(`  bridgePort: ${bridgePort}`);
+    console.log(`  bind: ${bind}`);
+    console.log(`  allowLanAccess: ${allowLanAccess ? "yes" : "no"}`);
+    console.log(`  approveDevice: ${approveDevice ? "yes" : "no"}`);
+    console.log(`  disableGatewayAuth: ${disableGatewayAuth ? "yes" : "no"}`);
+    console.log(`  inheritAuth: ${inheritAuth ? "yes" : "no"}`);
+    console.log(`  inheritModels: ${inheritModels ? "yes" : "no"}`);
+    console.log(`  inheritWebSearch: ${inheritWebSearch ? "yes" : "no"}`);
+    console.log(`  inheritManagedSkills: ${inheritManagedSkills ? "yes" : "no"}`);
+    console.log("");
+  }
 
   const envFile = envFileFor(baseDir, instance);
   const extraComposeFile = extraComposeFileFor(baseDir, instance);
