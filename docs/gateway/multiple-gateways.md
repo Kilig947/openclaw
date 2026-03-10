@@ -121,14 +121,14 @@ If you want one Dockerized Gateway per user, isolate each instance with its own:
 - gateway token
 - Compose project name
 
-The simplest path in this repo is `scripts/docker-multi-user.sh`.
+The simplest path in this repo is `pnpm docker:mu -- ...`.
 
 Initialize one instance per user:
 
 ```bash
-scripts/docker-multi-user.sh init
-scripts/docker-multi-user.sh init alice --gateway-port 18789 --bind loopback
-scripts/docker-multi-user.sh init bob --gateway-port 18889 --bind loopback
+pnpm docker:mu -- init
+pnpm docker:mu -- init alice --gateway-port 18789 --bind lan
+pnpm docker:mu -- init bob --gateway-port 18889 --bind lan
 ```
 
 Running `init` without arguments starts an interactive prompt for instance name,
@@ -138,11 +138,11 @@ If you want one shared skill pack for every user, point each instance at the
 same host directory:
 
 ```bash
-scripts/docker-multi-user.sh init alice \
+pnpm docker:mu -- init alice \
   --gateway-port 18789 \
   --shared-skills-dir /srv/openclaw/shared-skills
 
-scripts/docker-multi-user.sh init bob \
+pnpm docker:mu -- init bob \
   --gateway-port 18889 \
   --shared-skills-dir /srv/openclaw/shared-skills
 ```
@@ -155,33 +155,33 @@ The helper will:
 
 This creates:
 
-- `/srv/openclaw/alice/.openclaw`
-- `/srv/openclaw/alice/workspace`
-- `/srv/openclaw/alice/.env`
+- `/srv/openclaw/instances/alice/.openclaw`
+- `/srv/openclaw/instances/alice/workspace`
+- `/srv/openclaw/instances/alice/.env`
 
 and the same layout for `bob`.
 
 Start the instances:
 
 ```bash
-scripts/docker-multi-user.sh start alice
-scripts/docker-multi-user.sh start bob
+pnpm docker:mu -- start alice
+pnpm docker:mu -- start bob
 ```
 
 Run per-instance CLI commands through the matching container network namespace:
 
 ```bash
-scripts/docker-multi-user.sh run alice doctor
-scripts/docker-multi-user.sh run alice config get gateway.bind
-scripts/docker-multi-user.sh run bob plugins list
+pnpm docker:mu -- run alice doctor
+pnpm docker:mu -- run alice config get gateway.bind
+pnpm docker:mu -- run bob plugins list
 ```
 
 Check status or logs:
 
 ```bash
-scripts/docker-multi-user.sh status alice
-scripts/docker-multi-user.sh logs alice
-scripts/docker-multi-user.sh dashboard bob
+pnpm docker:mu -- status alice
+pnpm docker:mu -- logs alice
+pnpm docker:mu -- start bob
 ```
 
 ### Docker layout
@@ -190,18 +190,19 @@ Each instance keeps its own state under one base directory:
 
 ```text
 /srv/openclaw/
-  alice/
-    .env
-    .openclaw/
-      extensions/
-      openclaw.json
-    workspace/
-  bob/
-    .env
-    .openclaw/
-      extensions/
-      openclaw.json
-    workspace/
+  instances/
+    alice/
+      .env
+      .openclaw/
+        extensions/
+        openclaw.json
+      workspace/
+    bob/
+      .env
+      .openclaw/
+        extensions/
+        openclaw.json
+      workspace/
 ```
 
 ### Plugin path rule

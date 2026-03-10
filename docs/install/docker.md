@@ -160,12 +160,12 @@ If you want one isolated Docker Gateway per user, keep each instance on its own:
 This repo includes a helper for that:
 
 ```bash
-scripts/docker-multi-user.sh init
-scripts/docker-multi-user.sh init alice --gateway-port 18789 --bind loopback
-scripts/docker-multi-user.sh init bob --gateway-port 18889 --bind loopback
+pnpm docker:mu -- init
+pnpm docker:mu -- init alice --gateway-port 18789 --bind lan
+pnpm docker:mu -- init bob --gateway-port 18889 --bind lan
 
-scripts/docker-multi-user.sh start alice
-scripts/docker-multi-user.sh start bob
+pnpm docker:mu -- start alice
+pnpm docker:mu -- start bob
 ```
 
 If you omit the instance name and flags, `init` runs as an interactive setup
@@ -175,11 +175,11 @@ To share one skill pack across many Dockerized users, pass the same
 `--shared-skills-dir` for every instance:
 
 ```bash
-scripts/docker-multi-user.sh init alice \
+pnpm docker:mu -- init alice \
   --gateway-port 18789 \
   --shared-skills-dir /srv/openclaw/shared-skills
 
-scripts/docker-multi-user.sh init bob \
+pnpm docker:mu -- init bob \
   --gateway-port 18889 \
   --shared-skills-dir /srv/openclaw/shared-skills
 ```
@@ -190,8 +190,8 @@ The helper mounts that directory read-only and writes the matching
 Use the wrapper for instance-scoped CLI commands:
 
 ```bash
-scripts/docker-multi-user.sh run alice doctor
-scripts/docker-multi-user.sh run bob plugins list
+pnpm docker:mu -- run alice doctor
+pnpm docker:mu -- run bob plugins list
 ```
 
 For the full isolation checklist and layout guidance, see [Multiple gateways](/gateway/multiple-gateways).
