@@ -89,7 +89,7 @@ function mergeConfig(params: {
     ...currentGateway,
     mode: currentGateway.mode ?? "local",
     port: params.gatewayPort,
-    bind: currentGateway.bind ?? params.bind,
+    bind: params.bind,
   };
   delete (next.gateway as Record<string, unknown>).remote;
   const currentControlUi = getObject(currentGateway.controlUi);
