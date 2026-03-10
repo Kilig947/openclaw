@@ -33,6 +33,7 @@ import {
 type InitOptions = {
   instance?: string;
   baseDir?: string;
+  initForce?: boolean;
   gatewayPort?: string;
   bridgePort?: string;
   bind?: string;
@@ -379,8 +380,18 @@ async function promptInitOptions(input: InitOptions) {
 }
 
 export async function runInit(input: InitOptions) {
+  const presetInput = input.initForce
+    ? {
+        ...input,
+        force: true,
+        inheritAuth: input.inheritAuth ?? true,
+        inheritModels: input.inheritModels ?? true,
+        inheritWebSearch: input.inheritWebSearch ?? true,
+        inheritManagedSkills: input.inheritManagedSkills ?? true,
+      }
+    : input;
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-  const options = interactive ? await promptInitOptions(input) : input;
+  const options = interactive ? await promptInitOptions(presetInput) : presetInput;
 
   const instance = sanitizeName(options.instance || "");
   const baseDir = path.resolve(options.baseDir || DEFAULT_BASE_DIR);

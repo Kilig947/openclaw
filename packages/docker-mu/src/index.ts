@@ -280,6 +280,7 @@ program
   .command("init")
   .description("Create per-instance directories and config")
   .argument("[instance]", "Instance name")
+  .option("--init-force")
   .option("--gateway-port <port>")
   .option("--bridge-port <port>")
   .option("--bind <mode>")
@@ -310,6 +311,68 @@ program
     await runInit({
       instance,
       baseDir: resolveBaseDir(),
+      initForce: Boolean(opts.initForce),
+      gatewayPort: opts.gatewayPort,
+      bridgePort: opts.bridgePort,
+      bind: opts.bind,
+      allowLanAccess: opts.allowLanAccess,
+      approveDevice: opts.approveDevice,
+      disableGatewayAuth: opts.disableGatewayAuth,
+      image: opts.image,
+      token: opts.token,
+      configDir: opts.configDir,
+      workspaceDir: opts.workspaceDir,
+      projectName: opts.projectName,
+      sharedSkillsDir: opts.sharedSkillsDir,
+      sharedSkillsMount: opts.sharedSkillsMount,
+      authChoice: opts.authChoice,
+      force: Boolean(opts.force),
+      inheritAuth: Boolean(opts.inheritAuth),
+      inheritAuthFrom: opts.inheritAuthFrom,
+      inheritModels: Boolean(opts.inheritModels),
+      inheritWebSearch: Boolean(opts.inheritWebSearch),
+      inheritManagedSkills: Boolean(opts.inheritManagedSkills),
+      openaiApiKey: opts.openaiApiKey,
+      anthropicApiKey: opts.anthropicApiKey,
+      setupToken: opts.setupToken,
+    });
+  });
+
+program
+  .command("init-force")
+  .description("Create an instance with the safe auth/models/web/skills sync preset")
+  .argument("<instance>", "Instance name")
+  .option("--gateway-port <port>")
+  .option("--bridge-port <port>")
+  .option("--bind <mode>")
+  .option("--allow-lan-access")
+  .option("--no-allow-lan-access")
+  .option("--approve-device")
+  .option("--no-approve-device")
+  .option("--disable-gateway-auth")
+  .option("--no-disable-gateway-auth")
+  .option("--image <ref>")
+  .option("--token <token>")
+  .option("--config-dir <path>")
+  .option("--workspace-dir <path>")
+  .option("--project-name <name>")
+  .option("--shared-skills-dir <path>")
+  .option("--shared-skills-mount <path>")
+  .option("--auth-choice <choice>")
+  .option("--inherit-auth")
+  .option("--inherit-auth-from <path>")
+  .option("--inherit-models")
+  .option("--inherit-web-search")
+  .option("--inherit-managed-skills")
+  .option("--openai-api-key <key>")
+  .option("--anthropic-api-key <key>")
+  .option("--setup-token <token>")
+  .option("--force")
+  .action(async (instance, opts) => {
+    await runInit({
+      instance,
+      baseDir: resolveBaseDir(),
+      initForce: true,
       gatewayPort: opts.gatewayPort,
       bridgePort: opts.bridgePort,
       bind: opts.bind,
