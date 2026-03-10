@@ -134,12 +134,22 @@ function syncInstanceConfig(params: {
   targetConfig: Record<string, unknown>;
   env: Awaited<ReturnType<typeof loadInstanceEnv>>;
 }) {
-  const next = mergeRecords(params.targetConfig, params.sourceConfig);
+  // Sync only the explicitly portable slices from the local state. Copying the
+  // whole source config drags in local-only hooks/bootstrap/heartbeat settings.
+  const next = mergeRecords({}, params.targetConfig);
 
   const targetAgents = getObject(params.targetConfig.agents);
   const targetAgentDefaults = getObject(targetAgents.defaults);
   const nextAgents = getObject(next.agents);
   const nextAgentDefaults = getObject(nextAgents.defaults);
+  const sourceAgents = getObject(params.sourceConfig.agents);
+  const sourceAgentDefaults = getObject(sourceAgents.defaults);
+  if (Object.keys(getObject(sourceAgentDefaults.model)).length > 0) {
+    nextAgentDefaults.model = sourceAgentDefaults.model;
+  }
+  if (Object.keys(getObject(sourceAgentDefaults.models)).length > 0) {
+    nextAgentDefaults.models = sourceAgentDefaults.models;
+  }
   if (typeof targetAgentDefaults.workspace === "string" && targetAgentDefaults.workspace.trim()) {
     nextAgentDefaults.workspace = targetAgentDefaults.workspace;
   } else {
@@ -212,6 +222,15 @@ function syncInstanceConfig(params: {
           `http://127.0.0.1:${params.env.OPENCLAW_GATEWAY_PORT}`,
         ],
   };
+
+  const sourceTools = getObject(params.sourceConfig.tools);
+  const nextTools = getObject(next.tools);
+  if (Object.keys(getObject(sourceTools.web)).length > 0) {
+    next.tools = {
+      ...nextTools,
+      web: sourceTools.web,
+    };
+  }
 
   if (params.env.OPENCLAW_SHARED_SKILLS_DIR) {
     const nextSkills = getObject(next.skills);
@@ -558,6 +577,7 @@ program
       console.log(`  config: ${targetConfigPath}`);
       console.log(`  auth: ${path.join(env.OPENCLAW_CONFIG_DIR, "agents/main/agent")}`);
       console.log(`  skills: ${path.join(env.OPENCLAW_CONFIG_DIR, "skills")}`);
+      console.log("  excludes: workspace/bootstrap/HEARTBEAT");
       console.log("");
       console.log("If the instance is already running, restart it to apply updated config:");
       console.log(`  pnpm docker:mu -- restart ${env.OPENCLAW_INSTANCE_NAME}`);

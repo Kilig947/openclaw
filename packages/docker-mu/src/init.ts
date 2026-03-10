@@ -75,9 +75,10 @@ function mergeConfig(params: {
   inheritModels: boolean;
   inheritWebSearch: boolean;
 }) {
-  const baseConfig =
-    params.inheritAuth && params.sourceConfig ? mergeRecords({}, params.sourceConfig) : {};
-  const next = mergeRecords(baseConfig, params.existingConfig ?? {});
+  // Instance init should only inherit explicitly selected slices from the source
+  // state. Do not clone the full local config, otherwise hooks/bootstrap/heartbeat
+  // settings leak into every user instance.
+  const next = mergeRecords({}, params.existingConfig ?? {});
   const currentSession = getObject(next.session);
   next.session = {
     ...currentSession,
