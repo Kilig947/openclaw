@@ -36,6 +36,62 @@ function resolveBaseDir() {
   return String(program.opts<{ baseDir: string }>().baseDir || DEFAULT_BASE_DIR);
 }
 
+function detectLanAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const group of Object.values(interfaces)) {
+    for (const entry of group ?? []) {
+      if (!entry || entry.family !== "IPv4" || entry.internal) {
+        continue;
+      }
+      return entry.address;
+    }
+  }
+  return undefined;
+}
+
+function printDashboardLinks(port: string, token: string, gatewayAuthDisabled = false) {
+  console.log("");
+  console.log("Dashboard:");
+  console.log(`http://127.0.0.1:${port}/`);
+  if (!gatewayAuthDisabled) {
+    console.log("");
+    console.log("Dashboard URL:");
+    console.log(`http://127.0.0.1:${port}/#token=${token}`);
+  }
+
+  const lanAddress = detectLanAddress();
+  if (lanAddress) {
+    console.log("");
+    console.log("LAN Dashboard:");
+    console.log(`http://${lanAddress}:${port}/`);
+    if (!gatewayAuthDisabled) {
+      console.log("");
+      console.log("LAN Dashboard URL:");
+      console.log(`http://${lanAddress}:${port}/#token=${token}`);
+    }
+  }
+
+  if (!gatewayAuthDisabled) {
+    console.log("");
+    console.log("Token:");
+    console.log(token);
+  } else {
+    console.log("");
+    console.log("Gateway auth is disabled for this instance.");
+  }
+}
+
+async function readInstanceConfig(configDir: string) {
+  return (
+    (await readJson5File<Record<string, unknown>>(path.join(configDir, "openclaw.json"))) ?? {}
+  );
+}
+
+function isGatewayAuthDisabled(config: Record<string, unknown>) {
+  const auth = getObject(getObject(config.gateway).auth);
+  return auth.mode === "none";
+}
+
 async function runPassthrough(command: string, args: string[]) {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
@@ -128,6 +184,7 @@ function syncInstanceConfig(params: {
   const allowLanAccess = Array.isArray(targetControlUi.allowedOrigins)
     ? targetControlUi.allowedOrigins.some((value) => value === "*")
     : false;
+  const authDisabled = getObject(targetGateway.auth).mode === "none";
   next.gateway = {
     ...nextGateway,
     mode:
@@ -140,7 +197,9 @@ function syncInstanceConfig(params: {
   delete (next.gateway as Record<string, unknown>).remote;
   (next.gateway as Record<string, unknown>).auth = {
     ...getObject(nextGateway.auth),
-    token: params.env.OPENCLAW_GATEWAY_TOKEN,
+    mode: authDisabled ? "none" : getObject(targetGateway.auth).mode,
+    token: authDisabled ? undefined : params.env.OPENCLAW_GATEWAY_TOKEN,
+    password: authDisabled ? undefined : getObject(nextGateway.auth).password,
   };
   (next.gateway as Record<string, unknown>).controlUi = {
     ...getObject(nextGateway.controlUi),
@@ -208,6 +267,8 @@ program
   .option("--no-allow-lan-access")
   .option("--approve-device")
   .option("--no-approve-device")
+  .option("--disable-gateway-auth")
+  .option("--no-disable-gateway-auth")
   .option("--image <ref>")
   .option("--token <token>")
   .option("--config-dir <path>")
@@ -234,6 +295,7 @@ program
       bind: opts.bind,
       allowLanAccess: opts.allowLanAccess,
       approveDevice: opts.approveDevice,
+      disableGatewayAuth: opts.disableGatewayAuth,
       image: opts.image,
       token: opts.token,
       configDir: opts.configDir,
@@ -269,23 +331,19 @@ for (const command of ["start", "stop", "restart"] as const) {
     .action(async (instance) => {
       ensureDockerAvailable();
       await withInstance(instance, async ({ envFile, extraComposeFile, env }) => {
+        const currentConfig = await readInstanceConfig(env.OPENCLAW_CONFIG_DIR);
+        const gatewayAuthDisabled = isGatewayAuthDisabled(currentConfig);
         if (command === "restart") {
           await runDockerCompose(envFile, env.OPENCLAW_PROJECT_NAME, extraComposeFile, ["down"]);
           await runDockerCompose(envFile, env.OPENCLAW_PROJECT_NAME, extraComposeFile, [
             "up",
             "-d",
           ]);
-          console.log("");
-          console.log("Dashboard:");
-          console.log(`http://127.0.0.1:${env.OPENCLAW_GATEWAY_PORT}/`);
-          console.log("");
-          console.log("Dashboard URL:");
-          console.log(
-            `http://127.0.0.1:${env.OPENCLAW_GATEWAY_PORT}/#token=${env.OPENCLAW_GATEWAY_TOKEN}`,
+          printDashboardLinks(
+            env.OPENCLAW_GATEWAY_PORT,
+            env.OPENCLAW_GATEWAY_TOKEN,
+            gatewayAuthDisabled,
           );
-          console.log("");
-          console.log("Token:");
-          console.log(env.OPENCLAW_GATEWAY_TOKEN);
           return;
         }
         await runDockerCompose(envFile, env.OPENCLAW_PROJECT_NAME, extraComposeFile, [
@@ -293,17 +351,11 @@ for (const command of ["start", "stop", "restart"] as const) {
           ...(command === "start" ? ["-d"] : []),
         ]);
         if (command === "start") {
-          console.log("");
-          console.log("Dashboard:");
-          console.log(`http://127.0.0.1:${env.OPENCLAW_GATEWAY_PORT}/`);
-          console.log("");
-          console.log("Dashboard URL:");
-          console.log(
-            `http://127.0.0.1:${env.OPENCLAW_GATEWAY_PORT}/#token=${env.OPENCLAW_GATEWAY_TOKEN}`,
+          printDashboardLinks(
+            env.OPENCLAW_GATEWAY_PORT,
+            env.OPENCLAW_GATEWAY_TOKEN,
+            gatewayAuthDisabled,
           );
-          console.log("");
-          console.log("Token:");
-          console.log(env.OPENCLAW_GATEWAY_TOKEN);
         }
       });
     });
@@ -316,15 +368,16 @@ program
   .action(async (instance) => {
     ensureDockerAvailable();
     await withInstance(instance, async ({ envFile, extraComposeFile, env }) => {
+      const currentConfig = await readInstanceConfig(env.OPENCLAW_CONFIG_DIR);
+      const gatewayAuthDisabled = isGatewayAuthDisabled(currentConfig);
       const nextToken = randomToken();
       const nextEnv = {
         ...env,
-        OPENCLAW_GATEWAY_TOKEN: nextToken,
+        OPENCLAW_GATEWAY_TOKEN: gatewayAuthDisabled ? "" : nextToken,
       };
       await writeTextFile(envFile, buildEnvFileContents(nextEnv));
 
       const configPath = path.join(env.OPENCLAW_CONFIG_DIR, "openclaw.json");
-      const currentConfig = (await readJson5File<Record<string, unknown>>(configPath)) ?? {};
       const currentGateway = getObject(currentConfig.gateway);
       await writeJsonFile(configPath, {
         ...currentConfig,
@@ -332,7 +385,7 @@ program
           ...currentGateway,
           auth: {
             ...getObject(currentGateway.auth),
-            token: nextToken,
+            token: gatewayAuthDisabled ? undefined : nextToken,
           },
         },
       });
@@ -342,15 +395,7 @@ program
 
       console.log("");
       console.log("Rotated gateway token.");
-      console.log("");
-      console.log("Dashboard:");
-      console.log(`http://127.0.0.1:${env.OPENCLAW_GATEWAY_PORT}/`);
-      console.log("");
-      console.log("Dashboard URL:");
-      console.log(`http://127.0.0.1:${env.OPENCLAW_GATEWAY_PORT}/#token=${nextToken}`);
-      console.log("");
-      console.log("Token:");
-      console.log(nextToken);
+      printDashboardLinks(env.OPENCLAW_GATEWAY_PORT, nextToken, gatewayAuthDisabled);
     });
   });
 

@@ -27,6 +27,7 @@ export type InstanceEnv = {
   OPENAI_API_KEY: string;
   ANTHROPIC_API_KEY: string;
   OPENCLAW_SETUP_TOKEN: string;
+  OPENCLAW_DISABLE_GATEWAY_AUTH: "0" | "1";
 };
 
 export const ROOT_DIR = path.resolve(path.join(import.meta.dirname, "../../.."));
@@ -276,6 +277,7 @@ export function buildMetadataYaml(params: {
   configDir: string;
   workspaceDir: string;
   approveDevice: boolean;
+  disableGatewayAuth: boolean;
   authChoice: AuthChoice;
   inheritAuth: boolean;
   inheritAuthFrom: string;
@@ -296,6 +298,9 @@ export function buildMetadataYaml(params: {
     },
     control_ui: {
       approve_device: params.approveDevice,
+    },
+    gateway_auth: {
+      disabled: params.disableGatewayAuth,
     },
     image: params.image,
     paths: {

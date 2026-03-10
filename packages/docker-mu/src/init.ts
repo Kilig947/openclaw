@@ -38,6 +38,7 @@ type InitOptions = {
   bind?: string;
   allowLanAccess?: boolean;
   approveDevice?: boolean;
+  disableGatewayAuth?: boolean;
   image?: string;
   token?: string;
   configDir?: string;
@@ -66,6 +67,7 @@ function mergeConfig(params: {
   bind: BindMode;
   allowLanAccess: boolean;
   approveDevice: boolean;
+  disableGatewayAuth: boolean;
   token: string;
   sharedSkillsMount: string;
   hasSharedSkills: boolean;
@@ -101,7 +103,9 @@ function mergeConfig(params: {
   const currentAuth = getObject(currentGateway.auth);
   (next.gateway as Record<string, unknown>).auth = {
     ...currentAuth,
-    token: params.token,
+    mode: params.disableGatewayAuth ? "none" : (currentAuth.mode ?? "token"),
+    token: params.disableGatewayAuth ? undefined : params.token,
+    password: params.disableGatewayAuth ? undefined : currentAuth.password,
   };
 
   const nextAgents = getObject(next.agents);
@@ -243,6 +247,12 @@ async function promptInitOptions(input: InitOptions) {
       initialValue: input.approveDevice ?? true,
     }),
   );
+  const disableGatewayAuth = Boolean(
+    await confirm({
+      message: "是否关闭 Gateway 鉴权？",
+      initialValue: input.disableGatewayAuth ?? false,
+    }),
+  );
   const instanceDir = instanceDirFor(baseDir, instance);
   const configDir = path.resolve(
     String(
@@ -350,6 +360,7 @@ async function promptInitOptions(input: InitOptions) {
     bind,
     allowLanAccess,
     approveDevice,
+    disableGatewayAuth,
     configDir,
     workspaceDir,
     projectName,
@@ -377,6 +388,7 @@ export async function runInit(input: InitOptions) {
   const bind = (options.bind as BindMode | undefined) || DEFAULT_BIND;
   const allowLanAccess = options.allowLanAccess ?? false;
   const approveDevice = options.approveDevice ?? true;
+  const disableGatewayAuth = options.disableGatewayAuth ?? false;
   if (bind !== "lan" && bind !== "loopback") {
     fail("Bind mode must be lan or loopback.");
   }
@@ -451,6 +463,7 @@ export async function runInit(input: InitOptions) {
     bind,
     allowLanAccess,
     approveDevice,
+    disableGatewayAuth,
     token,
     sharedSkillsMount,
     hasSharedSkills: Boolean(sharedSkillsDir),
@@ -470,7 +483,7 @@ export async function runInit(input: InitOptions) {
     OPENCLAW_GATEWAY_PORT: String(gatewayPort),
     OPENCLAW_BRIDGE_PORT: String(bridgePort),
     OPENCLAW_GATEWAY_BIND: bind,
-    OPENCLAW_GATEWAY_TOKEN: token,
+    OPENCLAW_GATEWAY_TOKEN: disableGatewayAuth ? "" : token,
     OPENCLAW_IMAGE: image,
     OPENCLAW_INSTANCE_NAME: instance,
     OPENCLAW_PROJECT_NAME: projectName,
@@ -482,6 +495,7 @@ export async function runInit(input: InitOptions) {
     OPENAI_API_KEY: authChoice === "openai-api-key" ? options.openaiApiKey || "" : "",
     ANTHROPIC_API_KEY: authChoice === "apiKey" ? options.anthropicApiKey || "" : "",
     OPENCLAW_SETUP_TOKEN: authChoice === "token" ? options.setupToken || "" : "",
+    OPENCLAW_DISABLE_GATEWAY_AUTH: disableGatewayAuth ? "1" : "0",
   } satisfies InstanceEnv;
 
   await writeTextFile(envFile, buildEnvFileContents(env));
@@ -495,6 +509,7 @@ export async function runInit(input: InitOptions) {
       bind,
       allowLanAccess,
       approveDevice,
+      disableGatewayAuth,
       image,
       configDir,
       workspaceDir,
@@ -521,10 +536,11 @@ export async function runInit(input: InitOptions) {
   console.log("下一步：");
   console.log(`  1. pnpm docker:mu -- start ${instance}`);
   console.log(`  2. pnpm docker:mu -- auth ${instance}`);
-  if (approveDevice) {
+  if (disableGatewayAuth) {
+    console.log("  3. 已关闭 Gateway 鉴权，可直接打开 Dashboard");
+  } else if (approveDevice) {
     console.log(`  3. pnpm docker:mu -- approve-device ${instance}`);
-  }
-  if (!approveDevice) {
+  } else {
     console.log("  3. 已关闭设备验证，可直接使用带 token 的 Dashboard URL");
   }
 }
