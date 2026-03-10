@@ -347,6 +347,31 @@ export function ensureDockerAvailable() {
   }
 }
 
+function ensureDockerCommandSucceeded(command: string, args: string[], label: string) {
+  const result = spawnSync(command, args, { stdio: "inherit" });
+  if (result.status !== 0) {
+    fail(`${label} failed with exit code ${result.status ?? 1}.`);
+  }
+}
+
+export function ensureDockerImageAvailable(image: string) {
+  const inspect = spawnSync("docker", ["image", "inspect", image], { stdio: "ignore" });
+  if (inspect.status === 0) {
+    return;
+  }
+  if (image === "openclaw:local") {
+    console.log(`Docker image ${image} not found. Building from Dockerfile...`);
+    ensureDockerCommandSucceeded(
+      "docker",
+      ["build", "-t", image, "-f", path.join(ROOT_DIR, "Dockerfile"), ROOT_DIR],
+      `docker build ${image}`,
+    );
+    return;
+  }
+  console.log(`Docker image ${image} not found. Pulling...`);
+  ensureDockerCommandSucceeded("docker", ["pull", image], `docker pull ${image}`);
+}
+
 export async function runDockerCompose(
   envFile: string,
   projectName: string,

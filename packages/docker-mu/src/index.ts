@@ -10,6 +10,7 @@ import {
   copyDirIfExists,
   DEFAULT_BASE_DIR,
   ensureDockerAvailable,
+  ensureDockerImageAvailable,
   envFileFor,
   envFileFromInstanceDir,
   extraComposeFileFromInstanceDir,
@@ -331,6 +332,9 @@ for (const command of ["start", "stop", "restart"] as const) {
     .action(async (instance) => {
       ensureDockerAvailable();
       await withInstance(instance, async ({ envFile, extraComposeFile, env }) => {
+        if (command === "start" || command === "restart") {
+          ensureDockerImageAvailable(env.OPENCLAW_IMAGE);
+        }
         const currentConfig = await readInstanceConfig(env.OPENCLAW_CONFIG_DIR);
         const gatewayAuthDisabled = isGatewayAuthDisabled(currentConfig);
         if (command === "restart") {
@@ -368,6 +372,7 @@ program
   .action(async (instance) => {
     ensureDockerAvailable();
     await withInstance(instance, async ({ envFile, extraComposeFile, env }) => {
+      ensureDockerImageAvailable(env.OPENCLAW_IMAGE);
       const currentConfig = await readInstanceConfig(env.OPENCLAW_CONFIG_DIR);
       const gatewayAuthDisabled = isGatewayAuthDisabled(currentConfig);
       const nextToken = randomToken();
@@ -444,6 +449,7 @@ program
   .action(async (instance, openclawArgs) => {
     ensureDockerAvailable();
     await withInstance(instance, async ({ envFile, extraComposeFile, env }) => {
+      ensureDockerImageAvailable(env.OPENCLAW_IMAGE);
       await runDockerCompose(envFile, env.OPENCLAW_PROJECT_NAME, extraComposeFile, [
         "run",
         "--rm",
@@ -460,6 +466,7 @@ program
   .action(async (instance) => {
     ensureDockerAvailable();
     await withInstance(instance, async ({ envFile, extraComposeFile, env }) => {
+      ensureDockerImageAvailable(env.OPENCLAW_IMAGE);
       if (env.OPENCLAW_INIT_AUTH_CHOICE === "skip") {
         console.log(`No extra auth onboarding needed for ${env.OPENCLAW_INSTANCE_NAME}.`);
         return;
@@ -564,6 +571,7 @@ program
   .action(async (instance) => {
     ensureDockerAvailable();
     await withInstance(instance, async ({ envFile, extraComposeFile, env }) => {
+      ensureDockerImageAvailable(env.OPENCLAW_IMAGE);
       const configPath = path.join(env.OPENCLAW_CONFIG_DIR, "openclaw.json");
       const currentConfig = (await readJson5File<Record<string, unknown>>(configPath)) ?? {};
       const controlUi = getObject(getObject(getObject(currentConfig).gateway).controlUi);
